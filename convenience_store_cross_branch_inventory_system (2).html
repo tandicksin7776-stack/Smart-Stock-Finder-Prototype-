@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Store Stock Checker | 7-Eleven & Watsons Shared Budget Prototype</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Load Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Top accent bar that adapts to active store */
+        .top-accent-7eleven {
+            height: 4px;
+            background: linear-gradient(90deg, #f58220 0%, #008060 50%, #ed1c24 100%);
+        }
+        .top-accent-watsons {
+            height: 4px;
+            background: linear-gradient(90deg, #009999 0%, #06b6d4 50%, #0d9488 100%);
+        }
+        /* Smooth fade-in animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out;
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col selection:bg-emerald-600 selection:text-white pb-28">
+
+    <!-- Dynamic Top Brand Accent Stripe -->
+    <div id="top-accent-bar" class="top-accent-7eleven sticky top-0 z-50 transition-all duration-300"></div>
+
+    <!-- Clean Customer-Facing Header -->
+    <header class="bg-white border-b border-slate-200/80 sticky top-[4px] z-40">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+            
+            <!-- Top Row: Active Store Identity & Shared Cart Button -->
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                
+                <!-- Left: Dynamic Store Logo Badge & Title -->
+                <div class="flex items-center gap-3.5" id="header-store-brand">
+                    <!-- Rendered dynamically by JS based on active store -->
+                </div>
+
+                <!-- Right: Customer Location & Shared "My Cart & Budget" Button -->
+                <div class="flex items-center gap-2.5 sm:gap-3">
+                    <div class="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl text-xs">
+                        <i class="fa-solid fa-location-crosshairs text-emerald-600"></i>
+                        <div class="text-left">
+                            <span class="text-slate-400 font-medium block text-[10px] uppercase tracking-wider leading-none">Your Location</span>
+                            <span class="font-semibold text-slate-700">Downtown Metro Area</span>
+                        </div>
+                    </div>
+
+                    <!-- Shared My Cart & Budget Drawer Trigger -->
+                    <button 
+                        onclick="toggleCartDrawer(true)"
+                        class="flex items-center gap-3 bg-slate-900 hover:bg-slate-800 text-white px-3.5 sm:px-4 py-2.5 rounded-xl shadow-xs transition cursor-pointer group"
+                    >
+                        <div class="relative flex items-center justify-center">
+                            <i class="fa-solid fa-cart-shopping text-emerald-400 text-sm group-hover:scale-110 transition"></i>
+                            <span id="header-cart-badge" class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 leading-none">
+                                0
+                            </span>
+                        </div>
+                        <div class="text-left border-l border-slate-700 pl-3">
+                            <span class="block text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Shared Cart & Budget</span>
+                            <span id="header-cart-total" class="text-xs sm:text-sm font-extrabold text-white leading-tight">RM 0.00</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Second Row: Prominent Store Switcher (7-Eleven vs. Watsons) -->
+            <div class="pt-3 border-t border-slate-100">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-repeat text-slate-400"></i>
+                        Switch Store Type (Shared Shopping Cart & Budget)
+                    </span>
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">
+                        Items from both stores are combined into one budget
+                    </span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5" id="store-switcher-tabs">
+                    <!-- Dynamically rendered by JS -->
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        <!-- Search, Category & Branch Distance Filter Section -->
+        <section class="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 space-y-4">
+            
+            <!-- Top Row: Search Input & Category Selector -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                
+                <!-- Search Input -->
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        oninput="renderProducts()"
+                        placeholder="Search products in this store..." 
+                        class="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
+                    >
+                    <button id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Dynamic Category Filter Dropdown -->
+                <div class="sm:w-56">
+                    <select 
+                        id="category-select" 
+                        onchange="renderProducts()"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 cursor-pointer"
+                    >
+                        <!-- Dynamically populated per store -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Branch Filter Pills with Customer-to-Branch Distance -->
+            <div class="pt-3.5 border-t border-slate-100 space-y-2.5">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <span id="branch-filter-heading" class="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        Filter by Branch & Distance
+                    </span>
+                    <span id="active-branch-address" class="text-xs text-slate-500 font-medium">
+                        Showing availability across all 3 branches sorted by distance
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5" id="branch-filter-pills">
+                    <!-- Dynamically rendered by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Product Grid (2 Columns on Desktop) -->
+        <section id="product-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- Dynamically rendered by JS -->
+        </section>
+
+    </main>
+
+    <!-- Sticky Bottom Shared Cart & Budget Summary Bar -->
+    <div id="sticky-cart-bar" class="hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg animate-fade-in">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Left: Combined Item Count, Store Breakdown & Total Required Budget -->
+            <div class="flex items-center gap-3.5">
+                <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                    <i class="fa-solid fa-basket-shopping text-emerald-400"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="sticky-cart-count" class="text-xs font-bold text-slate-700 uppercase tracking-wider">0 Items in Shared Cart</span>
+                        <span id="sticky-store-split" class="text-[11px] font-medium text-slate-500"></span>
+                        <span id="sticky-budget-pill" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Within Budget
+                        </span>
+                    </div>
+                    <div class="flex items-baseline gap-2 mt-0.5">
+                        <span class="text-xs text-slate-500">Combined Required Budget:</span>
+                        <span id="sticky-cart-total" class="text-base sm:text-lg font-extrabold text-slate-900">RM 0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Open Shared Cart & Budget Drawer Button -->
+            <div class="flex items-center gap-2 ml-auto">
+                <button 
+                    onclick="clearCart()"
+                    class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                >
+                    Clear All
+                </button>
+                <button 
+                    onclick="toggleCartDrawer(true)"
+                    class="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-2 transition cursor-pointer"
+                >
+                    <span>View Shared Cart & Branch Match</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide-Over Shared Shopping Cart & Budget Calculator Drawer -->
+    <div id="cart-drawer-backdrop" onclick="toggleCartDrawer(false)" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 transition-opacity"></div>
+    
+    <aside id="cart-drawer" class="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white z-50 shadow-2xl border-l border-slate-200 flex flex-col translate-x-full transition-transform duration-300 ease-in-out">
+        
+        <!-- Drawer Header -->
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center text-sm shadow-xs">
+                    <i class="fa-solid fa-calculator"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Shared Cart & Budget Calculator</h2>
+                    <p class="text-xs text-slate-500">Combined 7-Eleven & Watsons shopping trip</p>
+                </div>
+            </div>
+            <button 
+                onclick="toggleCartDrawer(false)"
+                class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition cursor-pointer"
+            >
+                <i class="fa-solid fa-xmark text-base"></i>
+            </button>
+        </div>
+
+        <!-- Drawer Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-5">
+
+            <!-- Combined Budget Calculator Card -->
+            <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3.5">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Combined Required Budget</span>
+                        <span id="drawer-total-budget" class="text-2xl font-extrabold text-emerald-700">RM 0.00</span>
+                    </div>
+                    <div class="text-right">
+                        <label for="budget-limit-input" class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                            My Budget Limit (RM)
+                        </label>
+                        <div class="mt-1 inline-flex items-center bg-white border border-slate-300 rounded-xl px-2.5 py-1 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                            <span class="text-xs font-bold text-slate-400 mr-1">RM</span>
+                            <input 
+                                type="number" 
+                                id="budget-limit-input" 
+                                value="100.00" 
+                                min="0" 
+                                step="5"
+                                oninput="updateBudgetLimit(this.value)"
+                                class="w-16 text-right text-sm font-extrabold text-slate-800 focus:outline-none"
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Per-Store Subtotals Breakdown (7-Eleven + Watsons) -->
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <div class="bg-white rounded-xl p-2.5 border border-slate-200/80 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-600 text-white text-[9px] font-extrabold flex items-center justify-center">7-11</span>
+                            <span class="text-xs font-semibold text-slate-600">7-Eleven</span>
+                        </div>
+                        <span id="drawer-subtotal-7eleven" class="text-xs font-extrabold text-slate-900">RM 0.00</span>
+                    </div>
+                    <div class="bg-white rounded-xl p-2.5 border border-slate-200/80 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-md bg-teal-600 text-white text-[9px] font-extrabold flex items-center justify-center">W</span>
+                            <span class="text-xs font-semibold text-slate-600">Watsons</span>
+                        </div>
+                        <span id="drawer-subtotal-watsons" class="text-xs font-extrabold text-slate-900">RM 0.00</span>
+                    </div>
+                </div>
+
+                <!-- Quick Budget Presets -->
+                <div class="flex items-center justify-between gap-1.5 pt-0.5">
+                    <span class="text-[11px] text-slate-400 font-medium">Quick Set:</span>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="setBudgetPreset(30)" class="px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition cursor-pointer">RM 30</button>
+                        <button onclick="setBudgetPreset(50)" class="px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition cursor-pointer">RM 50</button>
+                        <button onclick="setBudgetPreset(100)" class="px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition cursor-pointer">RM 100</button>
+                        <button onclick="setBudgetPreset(150)" class="px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition cursor-pointer">RM 150</button>
+                    </div>
+                </div>
+
+                <!-- Visual Budget Progress Bar -->
+                <div class="space-y-1.5 pt-1">
+                    <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="budget-progress-bar" class="h-full bg-emerald-500 transition-all duration-300 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="budget-status-text" class="font-semibold text-emerald-700">RM 100.00 remaining</span>
+                        <span id="budget-percent-text" class="text-slate-400 font-medium">0% used</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Items List (Grouped by Store) -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Items in Shared Cart</h3>
+                    <button 
+                        id="drawer-clear-btn"
+                        onclick="clearCart()" 
+                        class="hidden text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
+                    >
+                        Remove All
+                    </button>
+                </div>
+                <div id="drawer-cart-items" class="space-y-3">
+                    <!-- Dynamically rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Best Branch Availability Check (Per Store) -->
+            <div id="drawer-branch-checker" class="space-y-3 pt-3 border-t border-slate-100">
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Best Branch Availability Check</h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">
+                        Finds the nearest branch for each store that has enough stock (pcs) for your cart items.
+                    </p>
+                </div>
+                <div id="drawer-branch-results" class="space-y-3.5">
+                    <!-- Dynamically rendered by JS -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Drawer Footer -->
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+            <button 
+                onclick="toggleCartDrawer(false)"
+                class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer"
+            >
+                Continue Shopping
+            </button>
+        </div>
+    </aside>
+
+    <!-- Minimal Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-20 right-5 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Clean Minimalist Footer -->
+    <footer class="bg-white border-t border-slate-200/80 mt-12 py-5 text-center text-xs text-slate-400">
+        <div class="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span class="font-medium text-slate-500">Multi-Store Stock & Budget Checker · 7-Eleven & Watsons Prototype</span>
+            <span>Real-time branch stock, customer distance & shared budget calculator (RM)</span>
+        </div>
+    </footer>
+
+    <!-- ========================================== -->
+    <!-- APPLICATION STATE & LOGIC (100% ENGLISH)   -->
+    <!-- ========================================== -->
+    <script>
+        // Fixed Currency Symbol
+        const CURRENCY = 'RM';
+
+        // Multi-Store Database: Store 1 (7-Eleven) & Store 2 (Watsons)
+        const STORES = {
+            sevenEleven: {
+                id: 'sevenEleven',
+                name: '7-Eleven',
+                title: '7-Eleven Stock Checker',
+                typeLabel: 'Convenience Store',
+                tagline: 'Check real-time 7-Eleven item availability, branch distance, and your shared shopping budget.',
+                badgeSub: '24H',
+                badgeMain: '7-11',
+                badgeClasses: 'bg-gradient-to-br from-orange-500 via-emerald-600 to-rose-600 border-emerald-500 text-white',
+                pillActiveClasses: 'bg-emerald-600 text-white',
+                accentBarClass: 'top-accent-7eleven',
+                branches: [
+                    {
+                        id: '7e-branchA',
+                        shortName: 'Branch A - Downtown',
+                        distanceKm: 0.8,
+                        distanceText: '0.8 km away',
+                        shortDistance: '0.8 km',
+                        isNearest: true,
+                        address: '18 Jalan Sultan Ismail • ~3 mins walk'
+                    },
+                    {
+                        id: '7e-branchB',
+                        shortName: 'Branch B - University Town',
+                        distanceKm: 2.4,
+                        distanceText: '2.4 km away',
+                        shortDistance: '2.4 km',
+                        isNearest: false,
+                        address: '42 Campus Walk Avenue • ~6 mins drive'
+                    },
+                    {
+                        id: '7e-branchC',
+                        shortName: 'Branch C - Central Station',
+                        distanceKm: 4.1,
+                        distanceText: '4.1 km away',
+                        shortDistance: '4.1 km',
+                        isNearest: false,
+                        address: 'Level 1, Main Transit Hub • ~10 mins drive'
+                    }
+                ],
+                products: [
+                    {
+                        id: '7e-prod-1',
+                        storeId: 'sevenEleven',
+                        name: 'Tuna Mayo Onigiri',
+                        category: 'Ready-to-Eat',
+                        price: 4.50,
+                        emoji: '🍙',
+                        stocks: {
+                            '7e-branchA': 14,
+                            '7e-branchB': 0,
+                            '7e-branchC': 6
+                        }
+                    },
+                    {
+                        id: '7e-prod-2',
+                        storeId: 'sevenEleven',
+                        name: 'Meiji Fresh Milk 1L',
+                        category: 'Dairy & Drinks',
+                        price: 8.90,
+                        emoji: '🥛',
+                        stocks: {
+                            '7e-branchA': 8,
+                            '7e-branchB': 15,
+                            '7e-branchC': 0
+                        }
+                    },
+                    {
+                        id: '7e-prod-3',
+                        storeId: 'sevenEleven',
+                        name: 'Iced Americano',
+                        category: 'Coffee',
+                        price: 5.50,
+                        emoji: '☕',
+                        stocks: {
+                            '7e-branchA': 0,
+                            '7e-branchB': 22,
+                            '7e-branchC': 9
+                        }
+                    },
+                    {
+                        id: '7e-prod-4',
+                        storeId: 'sevenEleven',
+                        name: 'Compact Umbrella',
+                        category: 'Daily Essentials',
+                        price: 15.90,
+                        emoji: '☂️',
+                        stocks: {
+                            '7e-branchA': 5,
+                            '7e-branchB': 3,
+                            '7e-branchC': 11
+                        }
+                    }
+                ]
+            },
+            watsons: {
+                id: 'watsons',
+                name: 'Watsons',
+                title: 'Watsons Stock Checker',
+                typeLabel: 'Health & Beauty Pharmacy',
+                tagline: 'Check real-time Watsons skincare & pharmacy stock, store distance, and your shared shopping budget.',
+                badgeSub: 'CARE',
+                badgeMain: 'W',
+                badgeClasses: 'bg-gradient-to-br from-teal-500 via-cyan-600 to-emerald-700 border-teal-400 text-white',
+                pillActiveClasses: 'bg-teal-600 text-white',
+                accentBarClass: 'top-accent-watsons',
+                branches: [
+                    {
+                        id: 'wt-branchA',
+                        shortName: 'Watsons A - City Mall',
+                        distanceKm: 0.6,
+                        distanceText: '0.6 km away',
+                        shortDistance: '0.6 km',
+                        isNearest: true,
+                        address: 'Lot G-12, City Center Mall • ~2 mins walk'
+                    },
+                    {
+                        id: 'wt-branchB',
+                        shortName: 'Watsons B - University Plaza',
+                        distanceKm: 2.1,
+                        distanceText: '2.1 km away',
+                        shortDistance: '2.1 km',
+                        isNearest: false,
+                        address: '15 Jalan Universiti Square • ~5 mins drive'
+                    },
+                    {
+                        id: 'wt-branchC',
+                        shortName: 'Watsons C - Sentral Concourse',
+                        distanceKm: 3.8,
+                        distanceText: '3.8 km away',
+                        shortDistance: '3.8 km',
+                        isNearest: false,
+                        address: 'Concourse Level, Sentral Station • ~9 mins drive'
+                    }
+                ],
+                products: [
+                    {
+                        id: 'wt-prod-1',
+                        storeId: 'watsons',
+                        name: 'Cetaphil Gentle Skin Cleanser 500ml',
+                        category: 'Skincare',
+                        price: 38.90,
+                        emoji: '🧴',
+                        stocks: {
+                            'wt-branchA': 12,
+                            'wt-branchB': 0,
+                            'wt-branchC': 7
+                        }
+                    },
+                    {
+                        id: 'wt-prod-2',
+                        storeId: 'watsons',
+                        name: 'Biore UV Aqua Rich Sunscreen 50g',
+                        category: 'Sun Care',
+                        price: 29.50,
+                        emoji: '☀️',
+                        stocks: {
+                            'wt-branchA': 0,
+                            'wt-branchB': 18,
+                            'wt-branchC': 9
+                        }
+                    },
+                    {
+                        id: 'wt-prod-3',
+                        storeId: 'watsons',
+                        name: 'Panadol ActiFast (20 Tablets)',
+                        category: 'Pharmacy & Health',
+                        price: 14.20,
+                        emoji: '💊',
+                        stocks: {
+                            'wt-branchA': 25,
+                            'wt-branchB': 10,
+                            'wt-branchC': 0
+                        }
+                    }
+                ]
+            }
+        };
+
+        // Helper list of all products across both stores
+        function getAllProducts() {
+            return [...STORES.sevenEleven.products, ...STORES.watsons.products];
+        }
+
+        // Active Store, Active Branch Filter & Shared Cart State
+        let activeStoreId = 'sevenEleven'; // 'sevenEleven' | 'watsons'
+        let selectedBranchFilter = 'all';  // 'all' or branch.id of active store
+        let cart = {};                     // Shared cart across both stores: { [productId]: quantity }
+        let budgetLimit = 100.00;          // Default customer budget limit in RM
+
+        // Format price in RM
+        function formatPrice(amount) {
+            return `${CURRENCY} ${Number(amount).toFixed(2)}`;
+        }
+
+        // Get active store object
+        function getActiveStore() {
+            return STORES[activeStoreId];
+        }
+
+        // Calculate combined totals and per-store subtotals
+        function getCartTotals() {
+            let totalItems = 0;
+            let totalCost = 0;
+            const byStore = {
+                sevenEleven: { items: 0, cost: 0 },
+                watsons: { items: 0, cost: 0 }
+            };
+
+            for (const prod of getAllProducts()) {
+                const qty = cart[prod.id] || 0;
+                if (qty > 0) {
+                    const sub = qty * prod.price;
+                    totalItems += qty;
+                    totalCost += sub;
+                    byStore[prod.storeId].items += qty;
+                    byStore[prod.storeId].cost += sub;
+                }
+            }
+            return { totalItems, totalCost, byStore };
+        }
+
+        // Switch between 7-Eleven and Watsons
+        function switchStore(storeId) {
+            if (!STORES[storeId] || activeStoreId === storeId) return;
+            activeStoreId = storeId;
+            selectedBranchFilter = 'all';
+
+            // Clear search box and re-populate category options for the newly selected store
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = '';
+
+            renderHeaderAndStoreSwitcher();
+            populateCategoryDropdown();
+            renderBranchFilterPills();
+            renderProducts();
+        }
+
+        // Render Top Accent Bar, Store Brand Header & Store Switcher Tabs
+        function renderHeaderAndStoreSwitcher() {
+            const store = getActiveStore();
+            const { byStore } = getCartTotals();
+
+            // 1. Update top accent bar color
+            const accentBar = document.getElementById('top-accent-bar');
+            accentBar.className = `${store.accentBarClass} sticky top-0 z-50 transition-all duration-300`;
+
+            // 2. Update header brand identity
+            const brandContainer = document.getElementById('header-store-brand');
+            const statusBadgeClass = activeStoreId === 'sevenEleven'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                : 'bg-teal-50 text-teal-700 border-teal-200/80';
+            const statusDotClass = activeStoreId === 'sevenEleven' ? 'bg-emerald-500' : 'bg-teal-500';
+
+            brandContainer.innerHTML = `
+                <div class="w-11 h-11 rounded-2xl ${store.badgeClasses} flex flex-col items-center justify-center font-extrabold shadow-xs border shrink-0">
+                    <span class="text-[9px] leading-none tracking-tighter opacity-90">${store.badgeSub}</span>
+                    <span class="text-base leading-none mt-0.5">${store.badgeMain}</span>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <h1 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                            ${store.title}
+                        </h1>
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}">
+                            <span class="w-1.5 h-1.5 rounded-full ${statusDotClass} animate-pulse"></span>
+                            3 Branches Connected
+                        </span>
+                    </div>
+                    <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
+                        ${store.tagline}
+                    </p>
+                </div>
+            `;
+
+            // 3. Render the 2 Store Switcher Tabs (7-Eleven vs. Watsons)
+            const tabsContainer = document.getElementById('store-switcher-tabs');
+            const storeList = [STORES.sevenEleven, STORES.watsons];
+
+            tabsContainer.innerHTML = storeList.map(st => {
+                const isActive = st.id === activeStoreId;
+                const storeCart = byStore[st.id];
+                const is7E = st.id === 'sevenEleven';
+
+                const activeBorder = isActive
+                    ? (is7E ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-500/15' : 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/15')
+                    : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100/80';
+
+                const badgeHtml = storeCart.items > 0
+                    ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${is7E ? 'bg-emerald-600 text-white' : 'bg-teal-600 text-white'}">
+                           ${storeCart.items} in cart (${formatPrice(storeCart.cost)})
+                       </span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white text-slate-500 border border-slate-200">
+                           ${st.products.length} Products
+                       </span>`;
+
+                return `
+                    <button 
+                        onclick="switchStore('${st.id}')"
+                        class="flex items-center justify-between gap-3 p-3 rounded-xl border text-left transition cursor-pointer ${activeBorder}"
+                    >
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-xl ${st.badgeClasses} flex flex-col items-center justify-center font-extrabold text-xs shrink-0 shadow-2xs">
+                                <span class="text-[8px] leading-none opacity-85">${st.badgeSub}</span>
+                                <span class="text-xs leading-none mt-0.5">${st.badgeMain}</span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-slate-900">${st.name}</span>
+                                    ${isActive ? `<span class="text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded ${is7E ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800'}">Active</span>` : ''}
+                                </div>
+                                <span class="text-xs text-slate-500 block truncate">
+                                    ${st.typeLabel} • 3 Branches
+                                </span>
+                            </div>
+                        </div>
+                        <div class="shrink-0">
+                            ${badgeHtml}
+                        </div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        // Populate Category Dropdown dynamically for the active store
+        function populateCategoryDropdown() {
+            const store = getActiveStore();
+            const select = document.getElementById('category-select');
+            const searchInput = document.getElementById('search-input');
+
+            // Update search placeholder with active store product examples
+            const exampleNames = store.products.map(p => p.name.split(' ')[0]).join(', ');
+            searchInput.placeholder = `Search ${store.name} products (e.g., ${exampleNames})...`;
+
+            // Extract unique categories with emojis
+            const categories = [];
+            for (const prod of store.products) {
+                if (!categories.find(c => c.name === prod.category)) {
+                    categories.push({ name: prod.category, emoji: prod.emoji });
+                }
+            }
+
+            select.innerHTML = `
+                <option value="all">All ${store.name} Categories</option>
+                ${categories.map(c => `<option value="${c.name}">${c.emoji} ${c.name}</option>`).join('')}
+            `;
+        }
+
+        // Render Top Branch Filter Buttons with Distance & Nearest Indicator
+        function renderBranchFilterPills() {
+            const store = getActiveStore();
+            const branches = store.branches;
+            const container = document.getElementById('branch-filter-pills');
+            const addressNote = document.getElementById('active-branch-address');
+            const headingEl = document.getElementById('branch-filter-heading');
+
+            headingEl.textContent = `Filter by ${store.name} Branch & Distance`;
+
+            const minKm = branches[0].shortDistance;
+            const maxKm = branches[branches.length - 1].shortDistance;
+
+            // "All Branches" button
+            const isAllActive = selectedBranchFilter === 'all';
+            let html = `
+                <button 
+                    onclick="selectBranchFilter('all')"
+                    class="flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+                        isAllActive 
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
+                            : 'bg-slate-50/80 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }"
+                >
+                    <div class="flex items-center justify-between w-full gap-1">
+                        <span class="text-xs font-bold">All ${store.name} Branches</span>
+                        <i class="fa-solid fa-store text-xs ${isAllActive ? 'text-emerald-400' : 'text-slate-400'}"></i>
+                    </div>
+                    <div class="mt-1.5 flex items-center gap-1.5 text-[11px] ${isAllActive ? 'text-slate-300' : 'text-slate-500'}">
+                        <span>📍 ${minKm} – ${maxKm}</span>
+                    </div>
+                </button>
+            `;
+
+            // Individual Branch buttons with Distance & Nearest Badge
+            html += branches.map(branch => {
+                const active = selectedBranchFilter === branch.id;
+                const nearestBadge = branch.isNearest
+                    ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          active 
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30' 
+                              : 'bg-emerald-100 text-emerald-800'
+                      }">Nearest</span>`
+                    : '';
+
+                return `
+                    <button 
+                        onclick="selectBranchFilter('${branch.id}')"
+                        class="flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+                            active 
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
+                                : 'bg-slate-50/80 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }"
+                    >
+                        <div class="flex items-center justify-between w-full gap-1">
+                            <span class="text-xs font-bold truncate">${branch.shortName}</span>
+                        </div>
+                        <div class="mt-1.5 flex items-center justify-between gap-1.5 w-full">
+                            <span class="text-[11px] font-medium ${active ? 'text-emerald-300' : 'text-slate-600'}">
+                                📍 ${branch.distanceText}
+                            </span>
+                            ${nearestBadge}
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+
+            // Update helper subtitle for selected branch
+            if (selectedBranchFilter === 'all') {
+                addressNote.innerHTML = `Showing availability across all 3 ${store.name} branches sorted by distance`;
+            } else {
+                const branchObj = branches.find(b => b.id === selectedBranchFilter);
+                if (branchObj) {
+                    addressNote.innerHTML = `📍 <strong>${branchObj.shortName}</strong> (${branchObj.distanceText}) — ${branchObj.address}`;
+                }
+            }
+        }
+
+        // Switch active branch filter
+        function selectBranchFilter(branchId) {
+            selectedBranchFilter = branchId;
+            renderBranchFilterPills();
+            renderProducts();
+        }
+
+        // Clear search input
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            renderProducts();
+        }
+
+        // Reset all filters for active store
+        function resetFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('category-select').value = 'all';
+            selectedBranchFilter = 'all';
+            renderBranchFilterPills();
+            renderProducts();
+        }
+
+        // Render Product Cards for Active Store with Exact Stock Quantities (pcs), Distances & Shared Cart Controls
+        function renderProducts() {
+            const store = getActiveStore();
+            const branches = store.branches;
+            const grid = document.getElementById('product-grid');
+            const searchVal = document.getElementById('search-input').value.trim().toLowerCase();
+            const categoryVal = document.getElementById('category-select').value;
+            const clearBtn = document.getElementById('clear-search-btn');
+
+            if (searchVal.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            // Filter products in the active store
+            const filtered = store.products.filter(prod => {
+                const matchSearch = !searchVal || 
+                    prod.name.toLowerCase().includes(searchVal) || 
+                    prod.category.toLowerCase().includes(searchVal);
+                const matchCategory = categoryVal === 'all' || prod.category === categoryVal;
+                const matchBranch = selectedBranchFilter === 'all' || prod.stocks[selectedBranchFilter] > 0;
+                return matchSearch && matchCategory && matchBranch;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full bg-white rounded-2xl p-12 text-center border border-slate-200/80">
+                        <p class="text-sm font-semibold text-slate-700">No available ${store.name} products match your filter</p>
+                        <p class="text-xs text-slate-400 mt-1">Try switching to "All ${store.name} Branches" or clearing your search query.</p>
+                        <button onclick="resetFilters()" class="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition cursor-pointer">
+                            Show All ${store.name} Products
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const isWatsons = store.id === 'watsons';
+            const priceColorClass = isWatsons ? 'text-teal-700' : 'text-emerald-700';
+            const activeCardBorder = isWatsons
+                ? 'border-teal-500 ring-2 ring-teal-500/15'
+                : 'border-emerald-500 ring-2 ring-emerald-500/15';
+            const addBtnHoverClass = isWatsons ? 'hover:bg-teal-600' : 'hover:bg-emerald-600';
+
+            grid.innerHTML = filtered.map(prod => {
+                const cartQty = cart[prod.id] || 0;
+                const itemSubtotal = cartQty * prod.price;
+
+                // Build the 3-branch availability list with distance badges and exact stock counts
+                const branchListHtml = branches.map(branch => {
+                    const qty = prod.stocks[branch.id] || 0;
+                    const isAvailable = qty > 0;
+                    const hasEnoughForCart = cartQty === 0 ? isAvailable : qty >= cartQty;
+                    const isSelectedBranch = selectedBranchFilter === branch.id;
+
+                    const nearestTag = branch.isNearest
+                        ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100/80 text-emerald-800">Nearest</span>`
+                        : '';
+
+                    let stockBadgeHtml = '';
+                    if (!isAvailable) {
+                        stockBadgeHtml = `
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                Out of Stock
+                            </span>
+                        `;
+                    } else if (cartQty > 0 && !hasEnoughForCart) {
+                        stockBadgeHtml = `
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Cart needs ${cartQty} pcs, branch only has ${qty} pcs">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                In Stock (${qty} pcs · Low)
+                            </span>
+                        `;
+                    } else {
+                        stockBadgeHtml = `
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                In Stock (${qty} pcs)
+                            </span>
+                        `;
+                    }
+
+                    return `
+                        <div class="flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition ${
+                            isSelectedBranch 
+                                ? 'bg-slate-100/90 border-slate-300' 
+                                : 'bg-slate-50/70 border-slate-200/70'
+                        }">
+                            <!-- Branch Name & Distance Badge -->
+                            <div class="flex items-center gap-2 flex-wrap min-w-0 pr-2">
+                                <span class="text-xs font-semibold text-slate-700 truncate">
+                                    ${branch.shortName}
+                                </span>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-slate-500 border border-slate-200/80">
+                                    📍 ${branch.shortDistance}
+                                </span>
+                                ${nearestTag}
+                            </div>
+
+                            <!-- Stock Status Badge (pcs) -->
+                            <div class="shrink-0">
+                                ${stockBadgeHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Card Footer: Add to Shared Cart OR Quantity Stepper + Item Subtotal
+                const footerActionHtml = cartQty === 0
+                    ? `
+                        <button 
+                            onclick="updateCartQty('${prod.id}', 1)"
+                            class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-900 ${addBtnHoverClass} text-white flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                        >
+                            <i class="fa-solid fa-cart-plus"></i>
+                            <span>Add to Shared Cart (${formatPrice(prod.price)})</span>
+                        </button>
+                    `
+                    : `
+                        <div class="flex items-center justify-between gap-3 bg-emerald-50/80 border border-emerald-200 px-3.5 py-2 rounded-xl">
+                            <div>
+                                <span class="text-xs font-extrabold text-emerald-900 block">
+                                    ${cartQty} in cart • ${formatPrice(itemSubtotal)}
+                                </span>
+                                <span class="text-[10px] text-emerald-700 font-medium">
+                                    Included in shared budget
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button 
+                                    onclick="updateCartQty('${prod.id}', -1)"
+                                    class="w-8 h-8 rounded-lg bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-200 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+                                    title="Decrease quantity"
+                                >
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
+                                <span class="w-7 text-center text-xs font-extrabold text-slate-900">${cartQty}</span>
+                                <button 
+                                    onclick="updateCartQty('${prod.id}', 1)"
+                                    class="w-8 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center text-xs font-bold transition cursor-pointer shadow-xs"
+                                    title="Increase quantity"
+                                >
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                return `
+                    <div class="bg-white rounded-2xl p-5 border ${cartQty > 0 ? activeCardBorder : 'border-slate-200/80'} shadow-xs hover:shadow-md transition flex flex-col justify-between gap-4 animate-fade-in">
+                        
+                        <!-- Card Header: Product Icon, Store & Category Tag, Name & RM Price -->
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3.5 min-w-0">
+                                <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl shrink-0 border border-slate-200/60">
+                                    ${prod.emoji}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isWatsons ? 'bg-teal-50 text-teal-700' : 'bg-emerald-50 text-emerald-700'}">
+                                            ${store.name}
+                                        </span>
+                                        <span class="inline-block text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate">
+                                            ${prod.category}
+                                        </span>
+                                    </div>
+                                    <h2 class="text-base font-bold text-slate-900 truncate mt-0.5" title="${prod.name}">
+                                        ${prod.name}
+                                    </h2>
+                                </div>
+                            </div>
+
+                            <div class="text-right shrink-0">
+                                <span class="text-base font-extrabold ${priceColorClass} block">${formatPrice(prod.price)}</span>
+                                <span class="text-[10px] text-slate-400 font-medium">per unit</span>
+                            </div>
+                        </div>
+
+                        <!-- Card Body: 3-Branch Availability & Distance List -->
+                        <div class="space-y-2 pt-3 border-t border-slate-100">
+                            ${branchListHtml}
+                        </div>
+
+                        <!-- Card Footer: Cart Controls & Subtotal -->
+                        <div class="pt-1">
+                            ${footerActionHtml}
+                        </div>
+
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update item quantity in Shared Shopping Cart
+        function updateCartQty(prodId, delta) {
+            const prod = getAllProducts().find(p => p.id === prodId);
+            if (!prod) return;
+
+            const storeName = STORES[prod.storeId].name;
+            const currentQty = cart[prodId] || 0;
+            const nextQty = Math.max(0, currentQty + delta);
+
+            if (nextQty === 0) {
+                delete cart[prodId];
+                if (currentQty > 0) {
+                    showToast(`Removed "${prod.name}" (${storeName})`);
+                }
+            } else {
+                cart[prodId] = nextQty;
+                if (currentQty === 0 && delta > 0) {
+                    showToast(`Added "${prod.name}" (${storeName}) to shared cart`);
+                }
+            }
+
+            renderHeaderAndStoreSwitcher();
+            renderProducts();
+            renderCartAndBudgetUI();
+        }
+
+        // Remove single item completely from Shared Cart
+        function removeCartItem(prodId) {
+            const prod = getAllProducts().find(p => p.id === prodId);
+            delete cart[prodId];
+            if (prod) {
+                showToast(`Removed "${prod.name}" from shared cart`);
+            }
+            renderHeaderAndStoreSwitcher();
+            renderProducts();
+            renderCartAndBudgetUI();
+        }
+
+        // Clear all items from Shared Cart
+        function clearCart() {
+            cart = {};
+            renderHeaderAndStoreSwitcher();
+            renderProducts();
+            renderCartAndBudgetUI();
+            showToast('Cleared shared shopping cart');
+        }
+
+        // Update customer budget limit from input
+        function updateBudgetLimit(val) {
+            const parsed = parseFloat(val);
+            budgetLimit = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+            renderCartAndBudgetUI();
+        }
+
+        // Quick preset button for budget limit
+        function setBudgetPreset(amount) {
+            budgetLimit = amount;
+            document.getElementById('budget-limit-input').value = amount.toFixed(2);
+            renderCartAndBudgetUI();
+        }
+
+        // Open / Close Slide-over Cart & Budget Drawer
+        function toggleCartDrawer(open) {
+            const drawer = document.getElementById('cart-drawer');
+            const backdrop = document.getElementById('cart-drawer-backdrop');
+            if (open) {
+                backdrop.classList.remove('hidden');
+                drawer.classList.remove('translate-x-full');
+                renderCartAndBudgetUI();
+            } else {
+                drawer.classList.add('translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        // Evaluate which branches of a given store have enough stock (pcs) for that store's cart items
+        function evaluateStoreBranchesForCart(storeId) {
+            const store = STORES[storeId];
+            const storeCartProducts = store.products.filter(p => (cart[p.id] || 0) > 0);
+
+            return store.branches.map(branch => {
+                const missingOrShortItems = [];
+                let fulfilledCount = 0;
+
+                for (const prod of storeCartProducts) {
+                    const neededQty = cart[prod.id];
+                    const branchStock = prod.stocks[branch.id] || 0;
+
+                    if (branchStock >= neededQty) {
+                        fulfilledCount++;
+                    } else if (branchStock === 0) {
+                        missingOrShortItems.push(`${prod.name} (Out of stock)`);
+                    } else {
+                        missingOrShortItems.push(`${prod.name} (Need ${neededQty}, only ${branchStock} pcs left)`);
+                    }
+                }
+
+                const canFulfillAll = storeCartProducts.length > 0 && missingOrShortItems.length === 0;
+                return {
+                    branch,
+                    fulfilledCount,
+                    totalDistinctItems: storeCartProducts.length,
+                    missingOrShortItems,
+                    canFulfillAll
+                };
+            });
+        }
+
+        // Update Header Cart Button, Sticky Bottom Bar, and Slide-Over Shared Cart Drawer
+        function renderCartAndBudgetUI() {
+            const { totalItems, totalCost, byStore } = getCartTotals();
+
+            // 1. Update Top Header Badge & Combined Total
+            document.getElementById('header-cart-badge').textContent = totalItems;
+            document.getElementById('header-cart-total').textContent = formatPrice(totalCost);
+
+            // 2. Update Per-Store Subtotals in Drawer
+            document.getElementById('drawer-subtotal-7eleven').textContent = formatPrice(byStore.sevenEleven.cost);
+            document.getElementById('drawer-subtotal-watsons').textContent = formatPrice(byStore.watsons.cost);
+
+            // 3. Calculate Budget Progress & Status
+            const isOverBudget = budgetLimit > 0 && totalCost > budgetLimit;
+            const remainingOrOver = budgetLimit - totalCost;
+            const rawPercent = budgetLimit > 0 ? (totalCost / budgetLimit) * 100 : (totalCost > 0 ? 100 : 0);
+            const clampedPercent = Math.min(100, Math.max(0, rawPercent));
+
+            // 4. Update Sticky Bottom Bar
+            const stickyBar = document.getElementById('sticky-cart-bar');
+            if (totalItems > 0) {
+                stickyBar.classList.remove('hidden');
+                document.getElementById('sticky-cart-count').textContent = `${totalItems} ${totalItems === 1 ? 'Item' : 'Items'} in Shared Cart`;
+                document.getElementById('sticky-cart-total').textContent = formatPrice(totalCost);
+
+                // Show store split in sticky bar
+                const splitParts = [];
+                if (byStore.sevenEleven.items > 0) {
+                    splitParts.push(`7-Eleven: ${byStore.sevenEleven.items} (${formatPrice(byStore.sevenEleven.cost)})`);
+                }
+                if (byStore.watsons.items > 0) {
+                    splitParts.push(`Watsons: ${byStore.watsons.items} (${formatPrice(byStore.watsons.cost)})`);
+                }
+                document.getElementById('sticky-store-split').textContent = splitParts.length > 0 ? `• ${splitParts.join(' + ')}` : '';
+
+                const stickyBudgetPill = document.getElementById('sticky-budget-pill');
+                if (isOverBudget) {
+                    stickyBudgetPill.className = 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200';
+                    stickyBudgetPill.textContent = `Over Budget by ${formatPrice(Math.abs(remainingOrOver))}`;
+                } else {
+                    stickyBudgetPill.className = 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200';
+                    stickyBudgetPill.textContent = `Within Budget (${formatPrice(remainingOrOver)} left)`;
+                }
+            } else {
+                stickyBar.classList.add('hidden');
+            }
+
+            // 5. Update Drawer Budget Meter
+            document.getElementById('drawer-total-budget').textContent = formatPrice(totalCost);
+            const progressBar = document.getElementById('budget-progress-bar');
+            const statusText = document.getElementById('budget-status-text');
+            const percentText = document.getElementById('budget-percent-text');
+
+            progressBar.style.width = `${clampedPercent}%`;
+            percentText.textContent = `${Math.round(rawPercent)}% of ${formatPrice(budgetLimit)}`;
+
+            if (isOverBudget) {
+                progressBar.className = 'h-full bg-rose-500 transition-all duration-300 rounded-full';
+                statusText.className = 'font-bold text-rose-600';
+                statusText.textContent = `Over budget by ${formatPrice(Math.abs(remainingOrOver))}`;
+            } else {
+                progressBar.className = 'h-full bg-emerald-500 transition-all duration-300 rounded-full';
+                statusText.className = 'font-semibold text-emerald-700';
+                statusText.textContent = `${formatPrice(remainingOrOver)} remaining in budget`;
+            }
+
+            // 6. Update Drawer Cart Items List (Grouped / Badged by Store)
+            const cartItemsContainer = document.getElementById('drawer-cart-items');
+            const clearBtn = document.getElementById('drawer-clear-btn');
+            const allCartProducts = getAllProducts().filter(p => (cart[p.id] || 0) > 0);
+
+            if (allCartProducts.length === 0) {
+                clearBtn.classList.add('hidden');
+                cartItemsContainer.innerHTML = `
+                    <div class="bg-slate-50 rounded-2xl p-6 text-center border border-dashed border-slate-200">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                            <i class="fa-solid fa-cart-shopping"></i>
+                        </div>
+                        <p class="text-xs font-bold text-slate-700">Your shared cart is empty</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Add products from 7-Eleven or Watsons to calculate your combined budget.</p>
+                    </div>
+                `;
+            } else {
+                clearBtn.classList.remove('hidden');
+                cartItemsContainer.innerHTML = allCartProducts.map(prod => {
+                    const qty = cart[prod.id];
+                    const subtotal = qty * prod.price;
+                    const isWatsons = prod.storeId === 'watsons';
+                    const storeName = STORES[prod.storeId].name;
+                    const storeBadgeClass = isWatsons
+                        ? 'bg-teal-50 text-teal-700 border-teal-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                    return `
+                        <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-lg shrink-0">
+                                    ${prod.emoji}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-bold border ${storeBadgeClass}">
+                                            ${storeName}
+                                        </span>
+                                        <h4 class="text-xs font-bold text-slate-900 truncate" title="${prod.name}">${prod.name}</h4>
+                                    </div>
+                                    <span class="text-[11px] text-slate-500 font-medium block mt-0.5">
+                                        ${formatPrice(prod.price)} × ${qty} = <strong class="text-slate-900">${formatPrice(subtotal)}</strong>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button 
+                                    onclick="updateCartQty('${prod.id}', -1)"
+                                    class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-bold transition cursor-pointer"
+                                >
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
+                                <span class="w-6 text-center text-xs font-extrabold text-slate-900">${qty}</span>
+                                <button 
+                                    onclick="updateCartQty('${prod.id}', 1)"
+                                    class="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center text-[11px] font-bold transition cursor-pointer"
+                                >
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                                <button 
+                                    onclick="removeCartItem('${prod.id}')"
+                                    class="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center text-xs ml-1 transition cursor-pointer"
+                                    title="Remove item"
+                                >
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 7. Update Drawer "Best Branch Availability Check" Per Store
+            const branchResultsContainer = document.getElementById('drawer-branch-results');
+            if (allCartProducts.length === 0) {
+                branchResultsContainer.innerHTML = `
+                    <p class="text-xs text-slate-400 italic">Add items from 7-Eleven or Watsons to see which branch can fulfill your order.</p>
+                `;
+            } else {
+                const activeStoreIdsInCart = ['sevenEleven', 'watsons'].filter(sid => byStore[sid].items > 0);
+
+                branchResultsContainer.innerHTML = activeStoreIdsInCart.map(sid => {
+                    const st = STORES[sid];
+                    const isWatsons = sid === 'watsons';
+                    const evaluations = evaluateStoreBranchesForCart(sid);
+                    const nearestFullMatch = evaluations.find(e => e.canFulfillAll);
+                    const bestBranchId = nearestFullMatch ? nearestFullMatch.branch.id : null;
+
+                    const branchesHtml = evaluations.map(evalItem => {
+                        const { branch, fulfilledCount, totalDistinctItems, missingOrShortItems, canFulfillAll } = evalItem;
+                        const isBestMatch = branch.id === bestBranchId;
+
+                        let badgeHtml = '';
+                        if (isBestMatch) {
+                            badgeHtml = `
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${isWatsons ? 'bg-teal-600 text-white' : 'bg-emerald-600 text-white'}">
+                                    <i class="fa-solid fa-star text-[9px]"></i> Nearest Full Match
+                                </span>
+                            `;
+                        } else if (canFulfillAll) {
+                            badgeHtml = `
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    All Items Available
+                                </span>
+                            `;
+                        } else {
+                            badgeHtml = `
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    ${fulfilledCount}/${totalDistinctItems} Ready
+                                </span>
+                            `;
+                        }
+
+                        const statusDetailHtml = canFulfillAll
+                            ? `<p class="text-[11px] text-emerald-700 font-semibold mt-1">
+                                   ✓ Has enough stock (pcs) for all ${st.name} items • ${branch.address}
+                               </p>`
+                            : `<p class="text-[11px] text-rose-600 font-medium mt-1">
+                                   Shortage: ${missingOrShortItems.join(', ')}
+                               </p>`;
+
+                        return `
+                            <div class="p-3 rounded-xl border transition ${
+                                isBestMatch
+                                    ? 'bg-emerald-50/70 border-emerald-500 ring-1 ring-emerald-500/20'
+                                    : canFulfillAll
+                                        ? 'bg-emerald-50/30 border-emerald-200'
+                                        : 'bg-slate-50 border-slate-200'
+                            }">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <h5 class="text-xs font-bold text-slate-900">${branch.shortName}</h5>
+                                        <span class="text-[11px] font-medium text-slate-500">
+                                            📍 ${branch.distanceText} ${branch.isNearest ? '• Nearest' : ''}
+                                        </span>
+                                    </div>
+                                    ${badgeHtml}
+                                </div>
+                                ${statusDetailHtml}
+                            </div>
+                        `;
+                    }).join('');
+
+                    return `
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold ${isWatsons ? 'text-teal-700' : 'text-emerald-700'} flex items-center gap-1.5">
+                                    <span class="w-4 h-4 rounded text-[9px] text-white flex items-center justify-center ${isWatsons ? 'bg-teal-600' : 'bg-emerald-600'}">${st.badgeMain}</span>
+                                    ${st.name} Branches (${byStore[sid].items} items • ${formatPrice(byStore[sid].cost)})
+                                </span>
+                            </div>
+                            <div class="space-y-2">
+                                ${branchesHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Minimal Toast Notification
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 text-white shadow-lg text-xs font-medium animate-fade-in';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.25s ease';
+                setTimeout(() => toast.remove(), 250);
+            }, 2000);
+        }
+
+        // Initialize Prototype on Load
+        window.onload = function () {
+            renderHeaderAndStoreSwitcher();
+            populateCategoryDropdown();
+            renderBranchFilterPills();
+            renderProducts();
+            renderCartAndBudgetUI();
+        };
+    </script>
+</body>
+</html>
